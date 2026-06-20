@@ -99,12 +99,12 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
     );
     if (flooding) {
       const fstrike = registerFloodOffense(message.channelId, userId);
-      let reason = persona.flood();
       const sanctionMs = timeoutDurationMs(fstrike);
+      let appliedTimeoutMs = 0;
       if (sanctionMs > 0 && member) {
         try {
           await member.timeout(sanctionMs, 'Flood — séance d\'écoute');
-          reason += '\n' + persona.timeoutNotice(sanctionMs);
+          appliedTimeoutMs = sanctionMs;
         } catch (e) {
           console.warn(
             `[timeout] flood ${message.author.tag} :`,
@@ -112,6 +112,7 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
           );
         }
       }
+      const reason = persona.flood(appliedTimeoutMs);
       await removeAndNotify(message, reason);
       return;
     }
@@ -142,13 +143,13 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
     const first = dups[0]?.existing;
     const link = first ? linkTo(first.message_id) : '';
     const strike = registerDuplicateOffense(message.channelId, userId);
-    let reason = persona.duplicate(link, subs.length > 1, strike);
 
     const sanctionMs = timeoutDurationMs(strike);
+    let appliedTimeoutMs = 0;
     if (sanctionMs > 0 && member) {
       try {
         await member.timeout(sanctionMs, 'Spam de doublons — séance d\'écoute');
-        reason += '\n' + persona.timeoutNotice(sanctionMs);
+        appliedTimeoutMs = sanctionMs;
       } catch (e) {
         console.warn(
           `[timeout] impossible de timeout ${message.author.tag} :`,
@@ -157,6 +158,7 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
       }
     }
 
+    const reason = persona.duplicate(link, subs.length > 1, strike, appliedTimeoutMs);
     await removeAndNotify(message, reason);
     return;
   }

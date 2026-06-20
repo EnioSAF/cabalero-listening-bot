@@ -19,6 +19,19 @@ function pick<const T>(items: readonly T[]): T {
   return items[Math.floor(Math.random() * items.length)]!;
 }
 
+// Formats a Discord quote block, including multiline quotes.
+function quote(text: string): string {
+  return text
+    .split('\n')
+    .map((line) => `> ${line}`)
+    .join('\n');
+}
+
+// Builds the common user-facing moderation notice.
+function sanctionNotice(sanction: string, reason: string, line: string): string {
+  return `## **SANCTION**\n${sanction}\n\n## **RAISON**\n${reason}\n\n${quote(line)}`;
+}
+
 const FLOOD_WARNINGS = [
   '**Doucement.** Tu baves beaucoup trop dans ce maudit channel.\n' +
     'Ceci est un avertissement, continue et tu seras mis au cachot vil gredin.',
@@ -46,6 +59,19 @@ const TIMEOUT_WARNINGS = [
   'Je te time out plus que prévu.',
   'Demain. Tu es. plus laaa aaaaa.',
 ] as const;
+
+// Picks the quote attached to a real timeout sanction.
+function timeoutQuote(ms: number): string {
+  if (ms === 20 * 60_000) {
+    return 'Va nettoyer la chemise de Caba avec de l\'eau chaude et reviens quand elle sera propre.';
+  }
+
+  if (ms >= 60 * 60_000) {
+    return 'Et hop, une heure de colle.';
+  }
+
+  return pick(TIMEOUT_WARNINGS);
+}
 
 export const persona = {
   // --- Public session announcements ---
@@ -83,71 +109,67 @@ export const persona = {
   },
 
   // Sent when a user posts too many messages too quickly.
-  flood(): string {
-    return pick(FLOOD_WARNINGS);
+  flood(timeoutMs = 0): string {
+    const sanction =
+      timeoutMs > 0
+        ? `Message supprimé + timeout de **${formatDuration(timeoutMs)}**.`
+        : 'Message supprimé + avertissement anti-flood.';
+
+    return sanctionNotice(
+      sanction,
+      'Tu as envoyé trop de messages trop vite dans le salon de dépôt.',
+      timeoutMs > 0 ? timeoutQuote(timeoutMs) : pick(FLOOD_WARNINGS)
+    );
   },
 
   // Sent when a message contains no valid music link or audio file.
   requireSubmission(): string {
-    return (
-      'Ce salon sert à déposer des sons pour Caba : **un lien** ou **un fichier audio**.\n' +
-      'Pour discuter, il y a le reste du Discord. Ici, Ganondorf trie les morceaux.'
+    return sanctionNotice(
+      'Message supprimé.',
+      'Ton message ne contient aucun lien de musique ni fichier audio valide.',
+      'Ce salon sert à déposer des sons pour Caba. Pour discuter, il y a le reste du Discord.'
     );
   },
 
   // Sent when every submitted track is already registered.
-  duplicate(link: string, multi: boolean, strike: number): string {
+  duplicate(link: string, multi: boolean, strike: number, timeoutMs = 0): string {
     const what = multi ? 'ces sons' : 'ce son';
+    const sanction =
+      timeoutMs > 0
+        ? `Message supprimé + timeout de **${formatDuration(timeoutMs)}**.`
+        : 'Message supprimé + avertissement doublon.';
+    const reason = `${multi ? 'Tous les sons envoyés sont déjà' : 'Le son envoyé est déjà'} enregistré dans cette session : ${link}`;
     const tiers = [
       // First duplicate: simple reminder.
-      `**Doublon.** ${multi ? 'Ces sons sont' : 'Ce son est'} déjà dans le registre : ${link}\n` +
-        'Petite leçon de Caba, validée par Ganondorf : **un son, une seule fois**.\n' +
+      'Petite leçon de Caba, validée par Ganondorf : un son, une seule fois.\n' +
         pick(DUPLICATE_JABS),
       // Second duplicate: firmer warning.
-      `**Encore le même bail.** Deuxième fois que tu renvoies ${what} : ${link}\n` +
-        'Ganondorf a compris le refrain. Au prochain doublon, il coupe le micro.\n' +
-        pick(DUPLICATE_JABS),
+      `Encore le même bail. Deuxième fois que tu renvoies ${what}.\n` + pick(DUPLICATE_JABS),
       // Third duplicate: final warning before sanction.
-      `**Troisième doublon.** Là, tu grattes l\'intro de trop : ${link}\n` +
-        'Dernier rappel avant sanction : **un son, une fois**. Même Caba ne rewind pas pour ça.\n' +
+      'Troisième doublon. Dernier rappel avant sanction : un son, une fois.\n' +
         pick(DUPLICATE_JABS),
       // Fourth duplicate and after: sanction warning.
-      `**Stop.** Tu repostes ${what} en boucle malgré le registre : ${link}\n` +
-        'Ganondorf a la main sur le mute. Pose autre chose ou laisse le salon respirer.\n' +
+      `Stop. Tu repostes ${what} en boucle malgré le registre.\n` +
         pick(DUPLICATE_JABS),
     ];
     const idx = Math.min(Math.max(strike, 1), tiers.length) - 1;
-    return tiers[idx]!;
-  },
-
-  // Added after a warning when a Discord timeout was actually applied.
-  timeoutNotice(ms: number): string {
-    if (ms === 20 * 60_000) {
-      return (
-        '**Mute 20 min.** Va nettoyer la chemise de Caba avec de l\'eau chaude ' +
-        'et reviens quand elle sera propre.'
-      );
-    }
-
-    if (ms >= 60 * 60_000) {
-      return `**Mute ${formatDuration(ms)}.** Et hop, une heure de colle.`;
-    }
-
-    return `**Mute ${formatDuration(ms)}.** ${pick(TIMEOUT_WARNINGS)}`;
+    return sanctionNotice(sanction, reason, timeoutMs > 0 ? timeoutQuote(timeoutMs) : tiers[idx]!);
   },
 
   // Sent when the session allows only one submission per user.
   oneOnly(): string {
-    return (
-      '**Un seul son par personne.** Tu as déjà posé ton morceau pour cette séance.\n' +
+    return sanctionNotice(
+      'Message supprimé.',
+      'La session est configurée sur un seul son par personne, et tu as déjà déposé le tien.',
       'Ganondorf ne prend pas les bonus tracks. Garde le prochain pour lundi.'
     );
   },
 
   // Sent when a user must wait before posting another valid submission.
   cooldown(seconds: number): string {
-    return (
-      `**Patience.** Attends encore **${seconds}s** avant de repost.\n` +
+    return sanctionNotice(
+      'Message supprimé.',
+      `Tu dois encore attendre **${seconds}s** avant de poster un autre son valide.`,
       pick(COOLDOWN_WARNINGS)
     );
   },
