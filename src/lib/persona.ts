@@ -1,10 +1,11 @@
 /**
- * Personnalité du bot « Ganondorf » : seigneur du mal grandiloquent + punchlines
- * à la Cabalero + posture de professeur qui distribue ses « petites leçons ».
+ * Personnalité du bot « Ganondorf » : modération sèche, refs à Caba et
+ * aux petites leçons, sans ton d'assistant ni surcharge d'emojis.
  * Tous les textes adressés aux humains passent par ici — un seul endroit à régler
  * pour ajuster le ton.
  */
 
+// Formats timeout durations for moderation messages.
 function formatDuration(ms: number): string {
   const min = Math.round(ms / 60_000);
   if (min < 60) return `${min} min`;
@@ -13,127 +14,193 @@ function formatDuration(ms: number): string {
   return m === 0 ? `${h} h` : `${h} h ${m}`;
 }
 
+// Picks one line from a small community-made message pool.
+function pick<const T>(items: readonly T[]): T {
+  return items[Math.floor(Math.random() * items.length)]!;
+}
+
+const FLOOD_WARNINGS = [
+  '**Doucement.** Tu baves beaucoup trop dans ce maudit channel.\n' +
+    'Ceci est un avertissement, continue et tu seras mis au cachot vil gredin.',
+  '**Pourquoi tu fais du forcing ?**\n' +
+    'Tu feras gaffe, t\'as oublié d\'être pertinent.',
+  '**Roule, vers le TO vers le ban mon ami.**\n' +
+    'J\'ai dit roule, vers le TO vers le ban mon ami.',
+] as const;
+
+const DUPLICATE_JABS = [
+  'T\'as pas le comportement du chef.',
+  'Pourquoi tu fais du forcing ?',
+  'Tu feras gaffe, t\'as oublié d\'être pertinent.',
+  'T\'es un Pokémon rare, type chiant.',
+] as const;
+
+const COOLDOWN_WARNINGS = [
+  'Pourquoi tu fais du forcing ?',
+  'T\'as pas le comportement du chef.',
+] as const;
+
+const TIMEOUT_WARNINGS = [
+  'Roule, vers le TO vers le ban mon ami.\nJ\'ai dit roule, vers le TO vers le ban mon ami.',
+  'Si tu te fais time-out tu te fais time-out 35 heures (d\'une traite.)',
+  'Je te time out plus que prévu.',
+  'Demain. Tu es. plus laaa aaaaa.',
+] as const;
+
 export const persona = {
-  // --- Annonces de session (public) ---
+  // --- Public session announcements ---
+
+  // Sent in the submission channel when a listening session starts.
   announceOpen(): string {
     return (
-      '🎧👑 **LA SÉANCE DU ROI DU MAL EST OUVERTE.**\n' +
-      'Approchez, mortels, et déposez vos sons devant mon trône — **lien** ou **fichier audio**.\n' +
-      '📚 *Petit cours avant d\'commencer :*\n' +
-      '• **Un son = une seule fois.** Le doublon, c\'est l\'hérésie, et l\'hérésie je la punis. 🗡️\n' +
-      '• **Pas de spam** : respire entre deux offrandes, la précipitation c\'est le tombeau du talent.\n' +
-      'Que le meilleur son règne sur Hyrule. 🔥'
+      '## **🟢 La séance d\'écoute est ouverte. 🟢**\n' +
+      'Dépose ton son pour le Profesor : **un lien** ou **un fichier audio**, proprement.\n\n' +
+      '**Petite leçon de Ganondorf :**\n' +
+      '• Un son ne passe qu\'une seule fois. Le doublon finit au cachot.\n' +
+      '• Pas de spam dans le salon, un seul son par personne ou Ganondorf sévira.\n\n' +
+      '• Envoyer un son dans un autre channel (non dédié) vous exclus 24h.\n\n' +
+      'Faites entrer les morceaux. **El Profesor** est prêt à vous juger les étudiants mutants.'
     );
   },
 
+  // Sent in the submission channel when a listening session ends.
   announceClose(total: number, posters: number): string {
     return (
-      '🛑👑 **LA SÉANCE EST CLOSE.**\n' +
-      `**${total}** son(s) déposé(s) par **${posters}** âme(s) courageuse(s). ` +
-      'Le Roi a tout consigné dans ses archives. 📜\n' +
-      'Reposez-vous, mortels. La nuit vous appartient… jusqu\'à la prochaine. 🌑'
+      '## **🔴 La séance d\'écoute est fermée. 🔴**\n' +
+      `**${total}** son(s) déposé(s) par **${posters}** personne(s). ` +
+      'Ganondorf a rangé le registre, **El Grande Profesor** se charge de la suite.\n' +
+      'Rendez-vous Lundi 20H pour la prochaine écoute.'
     );
   },
 
-  // --- Avertissements (MP / éphémère) ---
+  // --- User warnings sent by DM or temporary channel notice ---
+
+  // Prefix used before explaining why a user message was removed or flagged.
   removedHead(deleted: boolean, channelName: string): string {
     return deleted
-      ? `👑 **Décret du Roi du Mal** — ton message dans **#${channelName}** a été réduit en poussière.`
-      : `👑 **Décret du Roi du Mal** — un mot sur ton message dans **#${channelName}** :`;
+      ? `**Ganondorf a supprimé ton message** dans **#${channelName}**.`
+      : `**Ganondorf a un mot sur ton message** dans **#${channelName}** :`;
   },
 
+  // Sent when a user posts too many messages too quickly.
   flood(): string {
-    return (
-      '🌀 **Doucement, jeune padawan.** Tu mitrailles le salon comme si t\'avais le Triforce de ' +
-      'l\'impatience. 📚 Leçon du jour : un bon son se fait désirer. Calme tes ardeurs et reviens poser propre. 🗡️'
-    );
+    return pick(FLOOD_WARNINGS);
   },
 
+  // Sent when a message contains no valid music link or audio file.
   requireSubmission(): string {
     return (
-      '📜 Ce salon est un **temple dédié aux sons**, mortel — on y dépose un **lien** ou un ' +
-      '**fichier audio**, pas du bavardage. Reviens avec une offrande digne de mon trône. 🎵'
+      'Ce salon sert à déposer des sons pour Caba : **un lien** ou **un fichier audio**.\n' +
+      'Pour discuter, il y a le reste du Discord. Ici, Ganondorf trie les morceaux.'
     );
   },
 
-  /**
-   * Message de doublon, à intensité croissante selon le nombre de récidives
-   * (`strike`) de la personne dans la session.
-   */
+  // Sent when every submitted track is already registered.
   duplicate(link: string, multi: boolean, strike: number): string {
     const what = multi ? 'ces sons' : 'ce son';
     const tiers = [
-      // 1re fois — le prof recadre poliment.
-      `🗡️ **Tu oses ?** ${multi ? 'Ces sons trônent' : 'Ce son trône'} déjà dans mes archives 👉 ${link}\n` +
-        '📚 Leçon n°1 : **un son, une fois.** Le Roi du Mal n\'écoute pas deux fois la même chose. 🌑',
-      // 2e — agacé.
-      `😤 **Encore toi, mortel ?** Deuxième fois que tu me ressers ${what}. 👉 ${link}\n` +
-        '📕 Le professeur note un **avertissement** dans ton carnet. Au prochain, je hausse le ton.',
-      // 3e — colère.
-      `⚡ **SÉRIEUX ?!** Trois fois le même son ?! Tu joues avec les nerfs du Roi du Mal. 👉 ${link}\n` +
-        '📚 Dernier rappel du cours : **un. son. une. fois.** Prochaine récidive = sanction. 🗡️',
-      // 4e et + — fureur.
-      `🌋 **ÇA SUFFIT.** Tu reposes ${what} en boucle malgré mes décrets, misérable. 👉 ${link}\n` +
-        '💀 Le Roi a tout vu, tout consigné. Arrête immédiatement… ou subis ma colère.',
+      // First duplicate: simple reminder.
+      `**Doublon.** ${multi ? 'Ces sons sont' : 'Ce son est'} déjà dans le registre : ${link}\n` +
+        'Petite leçon de Caba, validée par Ganondorf : **un son, une seule fois**.\n' +
+        pick(DUPLICATE_JABS),
+      // Second duplicate: firmer warning.
+      `**Encore le même bail.** Deuxième fois que tu renvoies ${what} : ${link}\n` +
+        'Ganondorf a compris le refrain. Au prochain doublon, il coupe le micro.\n' +
+        pick(DUPLICATE_JABS),
+      // Third duplicate: final warning before sanction.
+      `**Troisième doublon.** Là, tu grattes l\'intro de trop : ${link}\n` +
+        'Dernier rappel avant sanction : **un son, une fois**. Même Caba ne rewind pas pour ça.\n' +
+        pick(DUPLICATE_JABS),
+      // Fourth duplicate and after: sanction warning.
+      `**Stop.** Tu repostes ${what} en boucle malgré le registre : ${link}\n` +
+        'Ganondorf a la main sur le mute. Pose autre chose ou laisse le salon respirer.\n' +
+        pick(DUPLICATE_JABS),
     ];
     const idx = Math.min(Math.max(strike, 1), tiers.length) - 1;
     return tiers[idx]!;
   },
 
-  /** Note de sanction ajoutée quand un timeout est réellement appliqué. */
+  // Added after a warning when a Discord timeout was actually applied.
   timeoutNotice(ms: number): string {
-    return `🔇 **Réduit au silence pendant ${formatDuration(ms)}.** Médite sur tes fautes, mortel. ⛓️`;
+    if (ms === 20 * 60_000) {
+      return (
+        '**Mute 20 min.** Va nettoyer la chemise de Caba avec de l\'eau chaude ' +
+        'et reviens quand elle sera propre.'
+      );
+    }
+
+    if (ms >= 60 * 60_000) {
+      return `**Mute ${formatDuration(ms)}.** Et hop, une heure de colle.`;
+    }
+
+    return `**Mute ${formatDuration(ms)}.** ${pick(TIMEOUT_WARNINGS)}`;
   },
 
+  // Sent when the session allows only one submission per user.
   oneOnly(): string {
     return (
-      '👑 **Un seul son par mortel.** Tu as déjà déposé ton offrande devant le Roi du Mal — ' +
-      'pas de rab. 📚 Règle de la séance : **une personne, un son.** Choisis bien, et reviens à la prochaine. 🌑'
+      '**Un seul son par personne.** Tu as déjà posé ton morceau pour cette séance.\n' +
+      'Ganondorf ne prend pas les bonus tracks. Garde le prochain pour lundi.'
     );
   },
 
+  // Sent when a user must wait before posting another valid submission.
   cooldown(seconds: number): string {
     return (
-      `⏳ **Patience, mortel.** Le pouvoir ne se déchaîne pas n'importe comment — attends encore ` +
-      `**${seconds}s** avant ta prochaine offrande. 📚 (La précipitation, c'est le S… mais le mauvais.)`
+      `**Patience.** Attends encore **${seconds}s** avant de repost.\n` +
+      pick(COOLDOWN_WARNINGS)
     );
   },
 
+  // Sent when a message has both new tracks and duplicate tracks.
   partialDuplicate(count: number, link: string): string {
+    const already = count === 1 ? 'était déjà' : 'étaient déjà';
     return (
-      '✅ J\'ai gardé tes nouveaux sons, beau geste. 📚 En revanche, ' +
-      `**${count}** traînai(en)t déjà dans mes archives (ex. 👉 ${link}) — recalé(s). ` +
-      'Un son, une fois, faut suivre le cours. 🗡️'
+      'Tes nouveaux sons sont gardés. Par contre, ' +
+      `**${count}** ${already} au registre (ex. ${link}), donc recalé(s).\n` +
+      'Petite leçon : un doublon ne devient pas neuf parce qu\'il revient avec le groupe.'
     );
   },
 
-  // --- Commandes (staff) ---
+  // --- Staff command replies ---
+
+  // Reply to staff after manually opening a listening session.
   startReply(): string {
-    return '🎧👑 La séance est ouverte. Le Roi veille sur les doublons et les spammeurs. Que ça commence.';
+    return 'Séance ouverte. Ganondorf surveille les doublons, Caba peut lancer les écoutes.';
   },
 
-  // --- Backup ---
+  // --- Backup messages ---
+
+  // Header for the backup copy of a completed listening session.
   backupHeader(sessionId: number, channelId: string): string {
-    return `🗄️👑 **Archives du Roi du Mal — séance #${sessionId}** de <#${channelId}>`;
+    return `**Archives de Ganondorf — séance #${sessionId}** de <#${channelId}>`;
   },
 
-  // --- Clear ---
+  // --- Clear-session confirmation flow ---
+
+  // Confirmation text before deleting messages from the last session.
   clearConfirm(count: number, sessionId: number, fromTs: number, toTs: number, capNote: string): string {
     return (
-      `⚠️ Le Roi s'apprête à **réduire en poussière ${count} message(s)** de la séance ` +
-      `#${sessionId} (du <t:${fromTs}:f> au <t:${toTs}:f>). Cette purge est **irréversible**, mortel.${capNote}`
+      `Ganondorf va supprimer **${count} message(s)** de la séance ` +
+      `#${sessionId} (du <t:${fromTs}:f> au <t:${toTs}:f>). Cette purge est **irréversible**.${capNote}`
     );
   },
+
+  // Label for the destructive clear confirmation button.
   clearButton(count: number): string {
-    return `Réduire ${count} message(s) en poussière`;
+    return `Supprimer ${count} message(s)`;
   },
+
+  // Sent when staff cancels the clear confirmation flow.
   clearCancel(): string {
-    return '🛡️ Le Roi a suspendu son geste. Tes messages sont épargnés… pour l\'instant.';
+    return 'Purge annulée. Le registre reste comme il est.';
   },
+
+  // Final report after attempting to delete session messages.
   clearDone(deleted: number, tooOld: number, failed: number): string {
-    let report = `🗡️ **${deleted} message(s) réduits en poussière** par le Roi du Mal.`;
+    let report = `**${deleted} message(s) supprimé(s)** par Ganondorf.`;
     if (tooOld > 0) report += ` ${tooOld} trop ancien(s) (> 14 jours) ont survécu.`;
-    if (failed > 0) report += ` ⚠️ ${failed} en échec (le Roi grogne — voir les logs).`;
+    if (failed > 0) report += ` ${failed} en échec, voir les logs.`;
     return report;
   },
 } as const;
