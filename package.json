@@ -4,15 +4,15 @@
   "description": "Bot Discord pour les sessions d'écoute du lundi de Cabalero : anti-doublon, anti-flood/spam, backup et clear de salon.",
   "type": "module",
   "license": "MIT",
-  "author": "NQNT-Devellopement",
+  "author": "EnioSAF",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/NQNT-Devellopement/cabalero-listening-bot.git"
+    "url": "git+https://github.com/EnioSAF/cabalero-listening-bot.git"
   },
   "bugs": {
-    "url": "https://github.com/NQNT-Devellopement/cabalero-listening-bot/issues"
+    "url": "https://github.com/EnioSAF/cabalero-listening-bot/issues"
   },
-  "homepage": "https://github.com/NQNT-Devellopement/cabalero-listening-bot#readme",
+  "homepage": "https://github.com/EnioSAF/cabalero-listening-bot#readme",
   "keywords": [
     "discord",
     "discord.js",
