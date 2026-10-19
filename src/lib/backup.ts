@@ -124,13 +124,13 @@ export async function backupSession(
   client: Client,
   cfg: ChannelConfig,
   session: SessionRow
-): Promise<void> {
-  if (!cfg.backup_channel_id) return;
+): Promise<boolean> {
+  if (!cfg.backup_channel_id) return true;
 
   const backupChannel = await fetchGuildTextChannel(client, cfg.backup_channel_id);
   if (!backupChannel) {
     console.warn(`[backup] salon de backup ${cfg.backup_channel_id} introuvable.`);
-    return;
+    return false;
   }
 
   const start = session.started_at;
@@ -168,11 +168,13 @@ export async function backupSession(
       recap.push(`… et ${subs.length - MAX_SONS_LISTED} autre(s).`);
     }
   }
-  await backupChannel
+  const headerSent = await backupChannel
     .send({ content: recap.join('\n').slice(0, 1990), allowedMentions: { parse: [] } })
-    .catch(() => {});
+    .then(() => true)
+    .catch(() => false);
+  if (!headerSent) return false;
 
-  if (replicable.length === 0) return;
+  if (replicable.length === 0) return true;
 
   const webhook = await getOrCreateWebhook(backupChannel, client);
   if (!webhook) {
@@ -183,10 +185,12 @@ export async function backupSession(
         allowedMentions: { parse: [] },
       })
       .catch(() => {});
-    return;
+    return false;
   }
 
+  let complete = true;
   for (const msg of replicable) {
-    await replicateMessage(webhook, msg);
+    if (!(await replicateMessage(webhook, msg))) complete = false;
   }
+  return complete;
 }

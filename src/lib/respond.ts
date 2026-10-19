@@ -4,10 +4,10 @@ import { persona } from './persona.js';
 type FullMessage = Message<true>;
 
 /** Envoie un avis à l'auteur en MP, avec repli message éphémère auto-supprimé. */
-async function sendNotice(message: FullMessage, text: string): Promise<void> {
+async function sendNotice(message: FullMessage, text: string): Promise<boolean> {
   try {
     await message.author.send(text);
-    return;
+    return true;
   } catch {
     // MP fermés : repli public temporaire.
   }
@@ -19,9 +19,16 @@ async function sendNotice(message: FullMessage, text: string): Promise<void> {
     setTimeout(() => {
       notice.delete().catch(() => {});
     }, 8000);
+    return true;
   } catch {
     // Même l'envoi public a échoué : rien de plus à faire.
+    return false;
   }
+}
+
+export interface ModerationOutcome {
+  deleted: boolean;
+  warned: boolean;
 }
 
 /**
@@ -32,7 +39,7 @@ async function sendNotice(message: FullMessage, text: string): Promise<void> {
 export async function removeAndNotify(
   message: FullMessage,
   reason: string
-): Promise<void> {
+): Promise<ModerationOutcome> {
   let deleted = false;
   try {
     await message.delete();
@@ -50,13 +57,14 @@ export async function removeAndNotify(
   }
 
   const head = persona.removedHead(deleted, message.channel.name);
-  await sendNotice(message, `${head}\n${reason}`);
+  const warned = await sendNotice(message, `${head}\n${reason}`);
+  return { deleted, warned };
 }
 
 /** Prévient l'auteur sans rien supprimer (ex. message partiellement accepté). */
 export async function notifyAuthor(
   message: FullMessage,
   text: string
-): Promise<void> {
-  await sendNotice(message, text);
+): Promise<boolean> {
+  return sendNotice(message, text);
 }

@@ -54,6 +54,18 @@ db.exec(`
     created_at  INTEGER NOT NULL
   );
 
+  CREATE TABLE IF NOT EXISTS sanction (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    session_id      INTEGER NOT NULL,
+    user_id         TEXT NOT NULL,
+    reason          TEXT NOT NULL,
+    message_deleted INTEGER NOT NULL,
+    warning_sent    INTEGER NOT NULL,
+    timeout_ms      INTEGER NOT NULL DEFAULT 0,
+    banned          INTEGER NOT NULL DEFAULT 0,
+    created_at      INTEGER NOT NULL
+  );
+
   CREATE UNIQUE INDEX IF NOT EXISTS idx_submission_unique
     ON submission(session_id, identifier);
   CREATE INDEX IF NOT EXISTS idx_submission_session
@@ -64,6 +76,8 @@ db.exec(`
   -- Utilisé par getLatestSession (/session clear).
   CREATE INDEX IF NOT EXISTS idx_session_channel
     ON session(channel_id);
+  CREATE INDEX IF NOT EXISTS idx_sanction_session
+    ON sanction(session_id);
 `);
 
 // --- Migrations légères (colonnes ajoutées après coup) ---
@@ -76,6 +90,11 @@ function ensureColumn(table: string, column: string, type: string): void {
 ensureColumn('channel_config', 'backup_channel_id', 'TEXT');
 ensureColumn('channel_config', 'one_per_person', 'INTEGER NOT NULL DEFAULT 0');
 ensureColumn('channel_config', 'bypass_roles', 'TEXT');
+ensureColumn('session', 'purge_at', 'INTEGER');
+ensureColumn('session', 'retention_channel_id', 'TEXT');
+ensureColumn('session', 'retention_message_id', 'TEXT');
+ensureColumn('session', 'backup_completed', 'INTEGER NOT NULL DEFAULT 0');
+ensureColumn('session', 'sanctions_report_completed', 'INTEGER NOT NULL DEFAULT 0');
 
 export interface ChannelConfig {
   channel_id: string;
@@ -105,6 +124,23 @@ export interface SessionRow {
   started_by: string | null;
   ended_at: number | null;
   ended_by: string | null;
+  purge_at: number | null;
+  retention_channel_id: string | null;
+  retention_message_id: string | null;
+  backup_completed: number;
+  sanctions_report_completed: number;
+}
+
+export interface SanctionRow {
+  id: number;
+  session_id: number;
+  user_id: string;
+  reason: string;
+  message_deleted: number;
+  warning_sent: number;
+  timeout_ms: number;
+  banned: number;
+  created_at: number;
 }
 
 export interface SubmissionRow {
@@ -177,6 +213,17 @@ const stmt = {
   countUserSubmissions: db.prepare(
     'SELECT COUNT(*) AS n FROM submission WHERE session_id = ? AND user_id = ?'
   ),
+  insertSanction: db.prepare(`
+    INSERT INTO sanction (
+      session_id, user_id, reason, message_deleted, warning_sent, timeout_ms, banned, created_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `),
+  listSanctions: db.prepare('SELECT * FROM sanction WHERE session_id = ? ORDER BY id ASC'),
+  listPendingPurges: db.prepare('SELECT * FROM session WHERE purge_at IS NOT NULL'),
+  listUnfinalized: db.prepare(`
+    SELECT * FROM session
+    WHERE ended_at IS NOT NULL AND purge_at IS NULL
+  `),
 };
 
 export function getChannelConfig(channelId: string): ChannelConfig | undefined {
@@ -360,6 +407,8 @@ export function recordSubmissions(
   messageId: string,
   subs: { kind: string; identifier: string; display: string }[]
 ): RecordResult {
+  const session = getSession(sessionId);
+  if (!session || session.ended_at !== null) return { status: 'duplicate' };
   for (const s of subs) {
     const existing = stmt.findSubmission.get(sessionId, s.identifier) as
       | SubmissionRow
@@ -399,4 +448,69 @@ export function countDistinctPosters(sessionId: number): number {
 export function countUserSubmissions(sessionId: number, userId: string): number {
   const row = stmt.countUserSubmissions.get(sessionId, userId) as { n: number };
   return row.n;
+}
+
+export function recordSanction(
+  sessionId: number,
+  userId: string,
+  reason: string,
+  deleted: boolean,
+  warned: boolean,
+  timeoutMs = 0,
+  banned = false
+): void {
+  const session = getSession(sessionId);
+  if (!session || session.ended_at !== null) return;
+  stmt.insertSanction.run(
+    sessionId,
+    userId,
+    reason,
+    deleted ? 1 : 0,
+    warned ? 1 : 0,
+    timeoutMs,
+    banned ? 1 : 0,
+    Date.now()
+  );
+}
+
+export function listSessionSanctions(sessionId: number): SanctionRow[] {
+  return stmt.listSanctions.all(sessionId) as SanctionRow[];
+}
+
+export function setSessionRetention(
+  sessionId: number,
+  purgeAt: number,
+  channelId?: string,
+  messageId?: string
+): void {
+  db.prepare(`
+    UPDATE session SET purge_at = ?,
+      retention_channel_id = COALESCE(?, retention_channel_id),
+      retention_message_id = COALESCE(?, retention_message_id)
+    WHERE id = ?
+  `).run(purgeAt, channelId ?? null, messageId ?? null, sessionId);
+}
+
+export function listPendingSessionPurges(): SessionRow[] {
+  return stmt.listPendingPurges.all() as SessionRow[];
+}
+
+export function listUnfinalizedSessions(): SessionRow[] {
+  return stmt.listUnfinalized.all() as SessionRow[];
+}
+
+export function markSessionOutputComplete(
+  sessionId: number,
+  output: 'backup' | 'sanctions'
+): void {
+  const column = output === 'backup' ? 'backup_completed' : 'sanctions_report_completed';
+  db.prepare(`UPDATE session SET ${column} = 1 WHERE id = ?`).run(sessionId);
+}
+
+export function purgeSessionData(sessionId: number): void {
+  db.transaction(() => {
+    db.prepare('DELETE FROM sanction WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM submission WHERE session_id = ?').run(sessionId);
+    db.prepare('DELETE FROM session WHERE id = ? AND ended_at IS NOT NULL').run(sessionId);
+  })();
 }

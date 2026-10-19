@@ -6,6 +6,7 @@ import {
   getSubmission,
   listMessageIdentifiers,
   recordSubmissions,
+  recordSanction,
 } from '../db.js';
 import { extractSubmissions, type AttachmentLike } from './normalize.js';
 import { timeoutDurationMs } from '../config.js';
@@ -18,6 +19,7 @@ import {
 } from './antiflood.js';
 import { notifyAuthor, removeAndNotify } from './respond.js';
 import { persona } from './persona.js';
+import { validateOnePerPersonSubmission } from './one-per-person.js';
 
 export function parseRoles(raw: string | null): string[] {
   if (!raw) return [];
@@ -59,7 +61,8 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
   // --- Déjà réduit au silence (timeout en cours) : suppression MUETTE, sans MP
   // ni nouveau timeout → coût minimal (1 appel API) sous spam soutenu. ---
   if (!isBypass && member?.isCommunicationDisabled()) {
-    await message.delete().catch(() => {});
+    const deleted = await message.delete().then(() => true).catch(() => false);
+    recordSanction(sessionId, userId, 'muted-message', deleted, false);
     return;
   }
 
@@ -113,14 +116,16 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
         }
       }
       const reason = persona.flood(appliedTimeoutMs);
-      await removeAndNotify(message, reason);
+      const outcome = await removeAndNotify(message, reason);
+      recordSanction(sessionId, userId, 'flood', outcome.deleted, outcome.warned, appliedTimeoutMs);
       return;
     }
   }
 
   if (subs.length === 0) {
     if (cfg.require_submission === 1) {
-      await removeAndNotify(message, persona.requireSubmission());
+      const outcome = await removeAndNotify(message, persona.requireSubmission());
+      recordSanction(sessionId, userId, 'no-submission', outcome.deleted, outcome.warned);
     }
     return;
   }
@@ -159,24 +164,35 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
     }
 
     const reason = persona.duplicate(link, subs.length > 1, strike, appliedTimeoutMs);
-    await removeAndNotify(message, reason);
+    const outcome = await removeAndNotify(message, reason);
+    recordSanction(sessionId, userId, 'duplicate', outcome.deleted, outcome.warned, appliedTimeoutMs);
     return;
   }
 
   // 2b. Mode « 1 son par personne ».
   if (cfg.one_per_person === 1) {
-    if (countUserSubmissions(sessionId, userId) > 0) {
-      await removeAndNotify(message, persona.oneOnly());
+    const validation = validateOnePerPersonSubmission(
+      countUserSubmissions(sessionId, userId),
+      news.length
+    );
+    if (validation === 'already-submitted') {
+      const outcome = await removeAndNotify(message, persona.oneOnly());
+      recordSanction(sessionId, userId, 'one-per-person', outcome.deleted, outcome.warned);
       return;
     }
-    if (news.length > 1) news.length = 1;
+    if (validation === 'too-many') {
+      const outcome = await removeAndNotify(message, persona.oneOnlyMultiple());
+      recordSanction(sessionId, userId, 'multiple-submissions', outcome.deleted, outcome.warned);
+      return;
+    }
   }
 
   // 3. Cooldown (uniquement à la création).
   if (!isEdit) {
     const wait = submissionCooldownRemaining(message.channelId, userId, cfg.cooldown_sec);
     if (wait > 0) {
-      await removeAndNotify(message, persona.cooldown(wait));
+      const outcome = await removeAndNotify(message, persona.cooldown(wait));
+      recordSanction(sessionId, userId, 'cooldown', outcome.deleted, outcome.warned);
       return;
     }
   }
@@ -190,6 +206,7 @@ export async function processMessage(message: Message, isEdit: boolean): Promise
   if (dups.length > 0) {
     const first = dups[0]?.existing;
     const link = first ? linkTo(first.message_id) : '';
-    await notifyAuthor(message, persona.partialDuplicate(dups.length, link));
+    const warned = await notifyAuthor(message, persona.partialDuplicate(dups.length, link));
+    recordSanction(sessionId, userId, 'partial-duplicate', false, warned);
   }
 }

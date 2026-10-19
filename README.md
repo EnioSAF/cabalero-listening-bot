@@ -106,6 +106,8 @@ Le bot ouvrira et fermera tout seul la session chaque lundi. Tu peux toujours fo
 ## 6. Backup & nettoyage de fin de session
 
 - **Backup automatique** : à la fermeture d'une session (manuelle, auto, ou réconciliation au redémarrage), si un salon de backup est configuré (`/session config salon_backup:#archives`), le bot **réplique le salon** dans ce salon privé via un **webhook** : chaque message est re-posté avec le pseudo et l'avatar d'origine, le texte et les pièces jointes, précédé d'un récap des sons. Les pièces jointes trop lourdes basculent automatiquement sur leur lien.
+- **Récap des sanctions** : le message de fermeture affiche les totaux (incidents, suppressions, avertissements, timeouts et bans). Un rapport détaillé avec le top et la liste complète par utilisateur est envoyé dans le thread dédié.
+- **Rétention limitée** : après la fermeture, le staff peut supprimer immédiatement les données de la session ou les conserver 30 jours. Sans choix, sons, sanctions et ligne de session sont supprimés après 24 heures. Les échéances survivent aux redémarrages.
 - **Clear avec confirmation** : `/session clear` compte les messages postés pendant la dernière session sur le salon, demande confirmation (boutons **Supprimer / Annuler**, visibles du seul staff), puis les supprime en masse. Les messages de plus de 14 jours ne sont pas supprimables en masse par l'API Discord (signalés dans le résultat).
 
 > Ordre conseillé : laisser le backup se faire en fin de session (il préserve tout), **puis** lancer `/session clear` pour repartir d'un salon propre.

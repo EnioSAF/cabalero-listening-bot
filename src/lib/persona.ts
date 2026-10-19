@@ -90,12 +90,13 @@ export const persona = {
   },
 
   // Sent in the submission channel when a listening session ends.
-  announceClose(total: number, posters: number): string {
+  announceClose(total: number, posters: number, sanctionSummary = ''): string {
     return (
       '## **🔴 La séance d\'écoute est fermée. 🔴**\n' +
       `**${total}** son(s) déposé(s) par **${posters}** personne(s). ` +
       'Ganondorf a rangé le registre, **El Grande Profesor** se charge de la suite.\n' +
-      'Rendez-vous Lundi 20H pour la prochaine écoute.'
+      'Rendez-vous Lundi 20H pour la prochaine écoute.' +
+      (sanctionSummary ? `\n\n${sanctionSummary}` : '')
     );
   },
 
@@ -162,6 +163,15 @@ export const persona = {
       'Message supprimé.',
       'La session est configurée sur un seul son par personne, et tu as déjà déposé le tien.',
       'Ganondorf ne prend pas les bonus tracks. Garde le prochain pour lundi.'
+    );
+  },
+
+  // Sent when a first message contains several tracks in one-track-per-person mode.
+  oneOnlyMultiple(): string {
+    return sanctionNotice(
+      'Message supprimé.',
+      'La session est configurée sur un seul son par personne, mais ton message en contient plusieurs.',
+      'Choisis-en un seul et renvoie-le. Ganondorf ne prend pas les compilations.'
     );
   },
 

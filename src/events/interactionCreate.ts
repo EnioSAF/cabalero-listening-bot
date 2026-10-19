@@ -1,12 +1,21 @@
 import { Events, MessageFlags } from 'discord.js';
 import type { BotEvent } from '../types.js';
 import { handleClearButton, isClearButton } from '../lib/clear.js';
+import { handleRetentionButton, isRetentionButton } from '../lib/retention.js';
 
 export const event: BotEvent<Events.InteractionCreate> = {
   name: Events.InteractionCreate,
   async execute(interaction, ctx) {
     // Boutons (confirmation de suppression).
     if (interaction.isButton()) {
+      if (isRetentionButton(interaction.customId)) {
+        try {
+          await handleRetentionButton(interaction);
+        } catch (err) {
+          console.error('[button:retention]', err);
+        }
+        return;
+      }
       if (isClearButton(interaction.customId)) {
         try {
           await handleClearButton(interaction);
