@@ -80,12 +80,13 @@ export const persona = {
   announceOpen(): string {
     return (
       '## **🟢 La séance d\'écoute est ouverte. 🟢**\n' +
-      'Dépose ton son pour le Profesor : **un lien** ou **un fichier audio**, proprement.\n\n' +
-      '**Petite leçon de Ganondorf :**\n' +
-      '• Un son ne passe qu\'une seule fois. Le doublon finit au cachot.\n' +
-      '• Pas de spam dans le salon, un seul son par personne ou Ganondorf sévira.\n\n' +
-      '• Envoyer un son dans un autre channel (non dédié) vous exclus 24h.\n\n' +
-      'Faites entrer les morceaux. **El Profesor** est prêt à vous juger les étudiants mutants.'
+      '\n' +
+      'Dépose ton son pour le Profesor : **un lien** ou **un fichier audio**, sinon CA DEGAGE !!!\n\n' +
+      '**Les règles à suivre jeune mutant :**\n' +
+      '• Un seul son par personne, ça sert à rien de spam tu vas te faire pincer très fort.\n' +
+      '• Envoyer un son dans un autre channel (non dédié) va vous faire bannir très fort également.\n\n' +
+      'Petit rappel :\n' +
+      '**L\'ordre d\'écoute est aléatoire, se plaindre sur le discord / twitch vous vaudra également des sévices et supplices que vous ne voulez pas subir. Postez votre son, soyez patients et gentils et tout ce passera correctement.**'
     );
   },
 
